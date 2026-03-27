@@ -15,25 +15,50 @@
     VoteChoice,
     VotePhase,
   } from './lib/types';
+  import { loadSavedProfile, saveProfile } from './lib/localProfile';
+
+  const savedProfile = loadSavedProfile();
+
+  function initialRoomFromUrl(): string | null {
+    if (typeof window === 'undefined') return null;
+    return decodeRoomParam(
+      new URLSearchParams(window.location.search).get(ROOM_QUERY_PARAM),
+    );
+  }
+
+  const initialRoomName = initialRoomFromUrl();
+  const joinWithSavedProfileNow =
+    initialRoomName !== null &&
+    savedProfile !== null &&
+    savedProfile.displayName.trim() !== '';
+
+  const initialAutoJoinPayload: RoomJoinPayload | null =
+    joinWithSavedProfileNow && initialRoomName && savedProfile
+      ? {
+          roomName: initialRoomName,
+          displayName: savedProfile.displayName.trim(),
+          seed: savedProfile.seed,
+        }
+      : null;
 
   const socket: Socket = io();
 
   let connection = $state<'connecting' | 'connected' | 'disconnected' | 'error'>(
     'connecting',
   );
-  let roomName = $state<string | null>(
-    decodeRoomParam(
-      new URLSearchParams(window.location.search).get(ROOM_QUERY_PARAM),
-    ),
-  );
+  let roomName = $state<string | null>(initialRoomName);
   let roomNameInput = $state('');
-  let displayName = $state('');
-  let seed = $state(crypto.randomUUID());
-  let joined = $state(false);
+  let displayName = $state(savedProfile?.displayName ?? '');
+  let seed = $state(savedProfile?.seed ?? crypto.randomUUID());
+  let joined = $state(joinWithSavedProfileNow);
   let participants = $state<RoomParticipant[]>([]);
   let votePhase = $state<VotePhase>('idle');
   let clientSocketId = $state<string | undefined>(undefined);
-  let pendingJoin = $state<RoomJoinPayload | null>(null);
+  let pendingJoin = $state<RoomJoinPayload | null>(initialAutoJoinPayload);
+
+  $effect(() => {
+    saveProfile(displayName, seed);
+  });
 
   const myVote = $derived.by(() => {
     if (!clientSocketId) return null;
@@ -48,11 +73,13 @@
     }
   }
 
-  socket.on('connect', () => {
+  function applySocketConnected() {
     connection = 'connected';
     clientSocketId = socket.id;
     emitJoinIfPending();
-  });
+  }
+
+  socket.on('connect', applySocketConnected);
 
   socket.on('disconnect', () => {
     connection = 'disconnected';
@@ -69,6 +96,27 @@
     votePhase = payload.votePhase;
   });
 
+  if (socket.connected) {
+    applySocketConnected();
+  }
+
+  /** After picking a room name on `/`, skip the join screen when a full profile is saved. */
+  function tryJoinWithSavedProfileNow() {
+    if (joined) return;
+    if (!roomName) return;
+    if (!savedProfile?.displayName.trim()) return;
+    const dn = displayName.trim();
+    if (!dn) return;
+    const payload: RoomJoinPayload = {
+      roomName,
+      displayName: dn,
+      seed,
+    };
+    pendingJoin = payload;
+    joined = true;
+    emitJoinIfPending();
+  }
+
   function submitRoomName(e: SubmitEvent) {
     e.preventDefault();
     const name = roomNameInput.trim();
@@ -76,6 +124,7 @@
     roomName = name;
     buildRoomUrl(name);
     roomNameInput = '';
+    tryJoinWithSavedProfileNow();
   }
 
   function regenerateAvatar() {
