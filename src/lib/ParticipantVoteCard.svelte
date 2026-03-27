@@ -11,6 +11,9 @@
     ariaLabel: string;
   } = $props();
 
+  /** Persistent abstainers: static dash only (no flip). */
+  const isAbstain = $derived(p.vote === 'abstain');
+
   /** Value face only after reveal; while voting everyone sees the back (face-down). */
   const showFront = $derived(votePhase === 'revealed');
 
@@ -19,34 +22,87 @@
     if (votePhase === 'idle') return '—';
     if (votePhase === 'revealed') {
       if (p.vote === null || p.vote === 'hidden') return '—';
-      if (p.vote === 'abstain') return 'Pass';
       if (p.vote === 'unsure') return '?';
       if (p.vote === 'coffee') return '☕';
+      if (p.vote === 'infinity') return '∞';
       return String(p.vote);
     }
     return '—';
   });
 </script>
 
-<div class="flip-scene" role="img" aria-label={ariaLabel}>
-  <div class="flip-inner" class:revealed={showFront}>
-    <div class="face face-back">
-      <span class="back-pattern"></span>
-      {#if votePhase === 'voting'}
-        {#if p.vote === null}
-          <span class="back-hint back-hint--pending">?</span>
-        {:else}
-          <span class="back-hint back-hint--voted" aria-hidden="true">✓</span>
+{#if isAbstain}
+  <div class="vote-static-abstain" role="img" aria-label={ariaLabel}>
+    <span class="vote-static-pattern"></span>
+    <span class="vote-static-dash" aria-hidden="true">—</span>
+  </div>
+{:else}
+  <div class="flip-scene" role="img" aria-label={ariaLabel}>
+    <div class="flip-inner" class:revealed={showFront}>
+      <div class="face face-back">
+        <span class="back-pattern"></span>
+        {#if votePhase === 'voting'}
+          {#if p.vote === null}
+            <span class="back-hint back-hint--pending">?</span>
+          {:else}
+            <span class="back-hint back-hint--voted" aria-hidden="true">✓</span>
+          {/if}
         {/if}
-      {/if}
-    </div>
-    <div class="face face-front">
-      <span class="face-value">{frontText}</span>
+      </div>
+      <div class="face face-front">
+        <span class="face-value" class:face-value--coffee={showFront && p.vote === 'coffee'}>{frontText}</span>
+      </div>
     </div>
   </div>
-</div>
+{/if}
 
 <style>
+  .vote-static-abstain {
+    position: relative;
+    width: 3.25rem;
+    height: 4.5rem;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.35rem;
+    border: 2px solid var(--poker-card-edge, var(--border));
+    background: linear-gradient(145deg, #3d2a5c 0%, #1e1430 50%, #2a1f42 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.35),
+      0 4px 12px rgba(0, 0, 0, 0.12);
+    overflow: hidden;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .vote-static-abstain {
+      background: linear-gradient(145deg, #4a3570 0%, #251a38 50%, #322448 100%);
+    }
+  }
+
+  .vote-static-pattern {
+    position: absolute;
+    inset: 0.35rem;
+    border-radius: 0.2rem;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: repeating-linear-gradient(
+      -12deg,
+      transparent,
+      transparent 3px,
+      rgba(255, 255, 255, 0.06) 3px,
+      rgba(255, 255, 255, 0.06) 4px
+    );
+    pointer-events: none;
+  }
+
+  .vote-static-dash {
+    position: relative;
+    z-index: 1;
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.55);
+  }
+
   .flip-scene {
     width: 3.25rem;
     height: 4.5rem;
@@ -151,5 +207,10 @@
     font-weight: 700;
     font-variant-numeric: tabular-nums;
     color: var(--accent);
+  }
+
+  .face-value--coffee {
+    font-size: 1.725rem;
+    line-height: 1;
   }
 </style>

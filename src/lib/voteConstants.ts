@@ -10,3 +10,6 @@ export const UNSURE_VOTE = 'unsure' as const;
 
 /** Coffee break / informal option (shown with coffee icon). Counts as a vote. */
 export const COFFEE_VOTE = 'coffee' as const;
+
+/** Deck card: infinity (∞). Cleared when a new round starts like numeric cards. */
+export const INFINITY_VOTE = 'infinity' as const;

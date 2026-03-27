@@ -10,7 +10,12 @@
     MAX_ROOM_NAME_LENGTH,
   } from './lib/roomUrl';
   import { Coffee } from 'lucide-svelte';
-  import { COFFEE_VOTE, UNSURE_VOTE, VOTE_VALUES } from './lib/voteConstants';
+  import {
+    COFFEE_VOTE,
+    INFINITY_VOTE,
+    UNSURE_VOTE,
+    VOTE_VALUES,
+  } from './lib/voteConstants';
   import type {
     RoomJoinPayload,
     RoomParticipant,
@@ -188,16 +193,34 @@
     }
   }
 
+  /** Persistent “I'm not voting” — separate from the ∞ deck card; survives new rounds. */
+  function toggleAbstain() {
+    if (myVote === 'abstain') {
+      socket.emit('vote:submit', { value: null });
+    } else {
+      socket.emit('vote:submit', { value: 'abstain' });
+    }
+  }
+
+  const participantsAbstain = $derived(
+    participants.filter((p) => p.vote === 'abstain'),
+  );
+  const participantsVoters = $derived(
+    participants.filter((p) => p.vote !== 'abstain'),
+  );
+
   function voteLabel(p: RoomParticipant, phase: VotePhase): string {
     if (phase === 'idle') return '—';
     if (phase === 'voting') {
+      if (p.vote === 'abstain') return 'Not voting';
       if (p.vote === null) return 'not voted yet';
       return 'voted'; // no value while hidden (including your own pick)
     }
     if (p.vote === null) return '—';
-    if (p.vote === 'abstain') return 'Abstain';
+    if (p.vote === 'abstain') return 'Not voting';
     if (p.vote === 'unsure') return '? (not joining)';
     if (p.vote === 'coffee') return 'Coffee';
+    if (p.vote === 'infinity') return '∞';
     return String(p.vote);
   }
 </script>
@@ -315,6 +338,18 @@
       {/if}
 
       {#if connection === 'connected'}
+        <div class="vote-abstain-row">
+          <button
+            type="button"
+            class="btn secondary vote-abstain-btn"
+            class:selected={myVote === 'abstain'}
+            onclick={toggleAbstain}
+            aria-pressed={myVote === 'abstain'}
+            aria-label="I'm not voting — stays on for new rounds"
+          >
+            I&apos;m not voting
+          </button>
+        </div>
         <div class="vote-cards" role="group" aria-label="Story point cards">
           <button
             type="button"
@@ -332,7 +367,7 @@
             onclick={() => submitVote(COFFEE_VOTE)}
             aria-label="Coffee break"
           >
-            <Coffee class="vote-card-coffee-icon" size={22} strokeWidth={2.25} aria-hidden="true" />
+            <Coffee class="vote-card-coffee-icon" size={33} strokeWidth={3.375} aria-hidden="true" />
           </button>
           {#each VOTE_VALUES as v (v)}
             <button
@@ -346,32 +381,58 @@
           {/each}
           <button
             type="button"
-            class="vote-card vote-card-abstain"
-            class:selected={myVote === 'abstain'}
-            onclick={() => submitVote('abstain')}
+            class="vote-card vote-card-infinity"
+            class:selected={myVote === INFINITY_VOTE}
+            onclick={() => submitVote(INFINITY_VOTE)}
+            aria-label="Infinity"
           >
-            I'm not voting
+            ∞
           </button>
         </div>
       {/if}
 
-      <h2 class="subheading">Participants</h2>
       {#if participants.length === 0}
+        <h2 class="subheading">Participants</h2>
         <p class="empty">No one here yet — or reconnecting…</p>
       {:else}
-        <ul class="participants">
-          {#each participants as p (p.socketId)}
-            <li class="participant">
-              <Avatar seed={p.seed} size={56} alt="" />
-              <span class="participant-name">{p.displayName}</span>
-              <ParticipantVoteCard
-                participant={p}
-                votePhase={votePhase}
-                ariaLabel={`${p.displayName}: ${voteLabel(p, votePhase)}`}
-              />
-            </li>
-          {/each}
-        </ul>
+        {#if participantsAbstain.length > 0}
+          <ul class="participants participants-non-voters">
+            {#each participantsAbstain as p (p.socketId)}
+              <li class="participant">
+                <Avatar seed={p.seed} size={56} alt="" />
+                <span class="participant-name">{p.displayName}</span>
+                <ParticipantVoteCard
+                  participant={p}
+                  votePhase={votePhase}
+                  ariaLabel={`${p.displayName}: ${voteLabel(p, votePhase)}`}
+                />
+              </li>
+            {/each}
+          </ul>
+        {/if}
+        <h2
+          class="subheading"
+          class:subheading-after-nonvoters={participantsAbstain.length > 0}
+        >
+          Participants
+        </h2>
+        {#if participantsVoters.length === 0}
+          <p class="empty">No one is voting yet.</p>
+        {:else}
+          <ul class="participants">
+            {#each participantsVoters as p (p.socketId)}
+              <li class="participant">
+                <Avatar seed={p.seed} size={56} alt="" />
+                <span class="participant-name">{p.displayName}</span>
+                <ParticipantVoteCard
+                  participant={p}
+                  votePhase={votePhase}
+                  ariaLabel={`${p.displayName}: ${voteLabel(p, votePhase)}`}
+                />
+              </li>
+            {/each}
+          </ul>
+        {/if}
       {/if}
     </section>
   {/if}
@@ -626,6 +687,14 @@
     background: var(--code-bg);
   }
 
+  .participants-non-voters {
+    margin-bottom: 0.25rem;
+  }
+
+  .subheading.subheading-after-nonvoters {
+    margin-top: 1rem;
+  }
+
   .participant-name {
     flex: 1;
     min-width: 0;
@@ -663,6 +732,18 @@
     font-weight: 600;
     font-variant-numeric: tabular-nums;
     color: var(--text-h);
+  }
+
+  .vote-abstain-row {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 0.85rem;
+  }
+
+  .vote-abstain-btn.selected {
+    border-color: var(--accent);
+    background: var(--accent-bg);
+    box-shadow: inset 0 0 0 2px rgba(170, 59, 255, 0.15);
   }
 
   .subheading {
@@ -733,12 +814,11 @@
       0 4px 16px rgba(170, 59, 255, 0.2);
   }
 
-  .vote-card-abstain {
-    font-weight: 600;
-    font-size: 0.62rem;
-    line-height: 1.15;
-    padding: 0.2rem 0.15rem;
+  .vote-card-infinity {
+    font-size: clamp(1.25rem, 4.5vw, 1.75rem);
+    font-weight: 700;
     font-variant-numeric: normal;
+    line-height: 1;
   }
 
   .vote-card-unsure {
@@ -756,7 +836,12 @@
   }
 
   .vote-card-coffee :global(.vote-card-coffee-icon) {
-    color: var(--accent);
+    color: #fff;
     flex-shrink: 0;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.25));
+  }
+
+  .vote-card-coffee.selected :global(.vote-card-coffee-icon) {
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
   }
 </style>

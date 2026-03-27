@@ -20,7 +20,7 @@ const roomParticipants = new Map();
 /** Room id → 'idle' | 'voting' | 'revealed' */
 const votePhase = new Map();
 
-/** Room id → socket id → number | 'abstain' | 'unsure' | 'coffee' | null */
+/** Room id → socket id → number | 'abstain' | 'unsure' | 'coffee' | 'infinity' | null */
 const votes = new Map();
 
 /**
@@ -51,8 +51,17 @@ function clearRoomVotes(roomId) {
   const pmap = roomParticipants.get(roomId);
   if (!vm || !pmap) return;
   for (const id of pmap.keys()) {
-    vm.set(id, null);
+    const cur = vm.get(id);
+    vm.set(id, cur === 'abstain' ? 'abstain' : null);
   }
+}
+
+/**
+ * Counts toward “X of Y have voted” during a hidden round (not persistent abstain).
+ * @param {unknown} raw
+ */
+function countsTowardVoteProgress(raw) {
+  return raw !== null && raw !== undefined && raw !== 'abstain';
 }
 
 /**
@@ -68,15 +77,20 @@ function buildRoomState(roomId, forSocketId) {
   if (pmap) {
     for (const [socketId, { displayName, seed }] of pmap) {
       const raw = voteMap.get(socketId) ?? null;
-      /** @type {number | 'abstain' | 'unsure' | 'coffee' | null | 'hidden'} */
+      /** @type {number | 'abstain' | 'unsure' | 'coffee' | 'infinity' | null | 'hidden'} */
       let vote;
       if (phase === 'idle') {
-        vote = null;
+        vote = raw === 'abstain' ? 'abstain' : null;
       } else if (phase === 'revealed' || socketId === forSocketId) {
         vote = raw;
       } else {
+        // voting: hide estimates from others, but persistent abstain is visible to the room.
         vote =
-          raw !== null && raw !== undefined ? 'hidden' : null;
+          raw === 'abstain'
+            ? 'abstain'
+            : raw !== null && raw !== undefined
+              ? 'hidden'
+              : null;
       }
       participants.push({ socketId, displayName, seed, vote });
     }
@@ -86,12 +100,14 @@ function buildRoomState(roomId, forSocketId) {
   let voteProgress = null;
   if (phase === 'voting' && pmap) {
     let cast = 0;
-    const total = pmap.size;
+    let total = 0;
     for (const id of pmap.keys()) {
       const raw = voteMap.get(id) ?? null;
-      if (raw !== null) cast++;
+      if (raw === 'abstain') continue;
+      total++;
+      if (countsTowardVoteProgress(raw)) cast++;
     }
-    voteProgress = { cast, total };
+    voteProgress = total > 0 ? { cast, total } : null;
   }
 
   return { participants, votePhase: phase, voteProgress };
@@ -228,15 +244,23 @@ export function connect(io) {
       const val =
         payload && typeof payload === 'object' ? payload.value : undefined;
 
-      /** Retract vote (must run before idle→voting bootstrap). */
+      /** Retract vote (clears deck pick or persistent abstain when idle). */
       if (val === null) {
-        if (phase !== 'voting' && phase !== 'revealed') return;
-        votes.get(roomId)?.set(socket.id, null);
+        if (phase === 'idle' || phase === 'voting' || phase === 'revealed') {
+          votes.get(roomId)?.set(socket.id, null);
+          emitRoomState(io, roomId);
+        }
+        return;
+      }
+
+      /** Idle: “I'm not voting” only updates preference; does not start a round. */
+      if (phase === 'idle' && val === 'abstain') {
+        votes.get(roomId)?.set(socket.id, 'abstain');
         emitRoomState(io, roomId);
         return;
       }
 
-      // idle: first pick starts a hidden round (clears votes).
+      // idle: first deck pick starts a hidden round (clears non-abstain votes).
       // voting: update hidden vote.
       // revealed: update vote in the open; everyone sees changes live.
       if (phase === 'idle') {
@@ -252,6 +276,8 @@ export function connect(io) {
         votes.get(roomId)?.set(socket.id, 'unsure');
       } else if (val === 'coffee') {
         votes.get(roomId)?.set(socket.id, 'coffee');
+      } else if (val === 'infinity') {
+        votes.get(roomId)?.set(socket.id, 'infinity');
       } else if (typeof val === 'number' && ALLOWED_VOTES.has(val)) {
         votes.get(roomId)?.set(socket.id, val);
       } else {
