@@ -3,6 +3,7 @@
   import Avatar from './lib/Avatar.svelte';
   import CopyRoomLink from './lib/CopyRoomLink.svelte';
   import ParticipantVoteCard from './lib/ParticipantVoteCard.svelte';
+  import VoteHistogram from './lib/VoteHistogram.svelte';
   import {
     ROOM_QUERY_PARAM,
     decodeRoomParam,
@@ -319,45 +320,47 @@
             I&apos;m not voting
           </button>
         </div>
-        <div class="vote-cards" role="group" aria-label="Story point cards">
-          <button
-            type="button"
-            class="vote-card vote-card-unsure"
-            class:selected={myVote === UNSURE_VOTE}
-            onclick={() => submitVote(UNSURE_VOTE)}
-            aria-label="Not joining this round (shown as question mark)"
-          >
-            ?
-          </button>
-          <button
-            type="button"
-            class="vote-card vote-card-coffee"
-            class:selected={myVote === COFFEE_VOTE}
-            onclick={() => submitVote(COFFEE_VOTE)}
-            aria-label="Coffee break"
-          >
-            <Coffee class="vote-card-coffee-icon" size={33} strokeWidth={2} aria-hidden="true" />
-          </button>
-          {#each VOTE_VALUES as v (v)}
+        {#if myVote !== 'abstain'}
+          <div class="vote-cards" role="group" aria-label="Story point cards">
             <button
               type="button"
-              class="vote-card"
-              class:selected={myVote === v}
-              onclick={() => submitVote(v)}
+              class="vote-card vote-card-unsure"
+              class:selected={myVote === UNSURE_VOTE}
+              onclick={() => submitVote(UNSURE_VOTE)}
+              aria-label="Not joining this round (shown as question mark)"
             >
-              {v}
+              ?
             </button>
-          {/each}
-          <button
-            type="button"
-            class="vote-card vote-card-infinity"
-            class:selected={myVote === INFINITY_VOTE}
-            onclick={() => submitVote(INFINITY_VOTE)}
-            aria-label="Infinity"
-          >
-            ∞
-          </button>
-        </div>
+            <button
+              type="button"
+              class="vote-card vote-card-coffee"
+              class:selected={myVote === COFFEE_VOTE}
+              onclick={() => submitVote(COFFEE_VOTE)}
+              aria-label="Coffee break"
+            >
+              <Coffee class="vote-card-coffee-icon" size={33} strokeWidth={2} aria-hidden="true" />
+            </button>
+            {#each VOTE_VALUES as v (v)}
+              <button
+                type="button"
+                class="vote-card"
+                class:selected={myVote === v}
+                onclick={() => submitVote(v)}
+              >
+                {v}
+              </button>
+            {/each}
+            <button
+              type="button"
+              class="vote-card vote-card-infinity"
+              class:selected={myVote === INFINITY_VOTE}
+              onclick={() => submitVote(INFINITY_VOTE)}
+              aria-label="Infinity"
+            >
+              ∞
+            </button>
+          </div>
+        {/if}
         <div class="vote-toolbar">
           <button
             type="button"
@@ -427,6 +430,10 @@
           {/if}
         </div>
       </div>
+
+      {#if votePhase === 'revealed'}
+        <VoteHistogram participants={participants} />
+      {/if}
       </div>
     </section>
   {/if}
