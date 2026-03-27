@@ -24,21 +24,18 @@
     }
     return '—';
   });
-
-  /** While voting: "?" until they vote, then plain back (no hint). */
-  const backHint = $derived.by(() => {
-    if (votePhase === 'idle') return '';
-    if (votePhase === 'voting' && p.vote === null) return '?';
-    return '';
-  });
 </script>
 
 <div class="flip-scene" role="img" aria-label={ariaLabel}>
   <div class="flip-inner" class:revealed={showFront}>
     <div class="face face-back">
       <span class="back-pattern"></span>
-      {#if backHint}
-        <span class="back-hint">{backHint}</span>
+      {#if votePhase === 'voting'}
+        {#if p.vote === null}
+          <span class="back-hint back-hint--pending">?</span>
+        {:else}
+          <span class="back-hint back-hint--voted" aria-hidden="true">✓</span>
+        {/if}
       {/if}
     </div>
     <div class="face face-front">
@@ -115,6 +112,23 @@
     font-size: 1.1rem;
     font-weight: 700;
     font-variant-numeric: tabular-nums;
+  }
+
+  .back-hint--pending {
+    opacity: 0.95;
+  }
+
+  .back-hint--voted {
+    font-size: 1.35rem;
+    font-weight: 500;
+    color: #86efac;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .back-hint--voted {
+      color: #4ade80;
+    }
   }
 
   .face-front {

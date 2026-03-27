@@ -18,9 +18,9 @@ export type VoteChoice = VoteCard | 'abstain';
  */
 export type VoteDisplay = VoteChoice | null | 'hidden';
 
-/** Client → server: cast a vote during an active voting phase. */
+/** Client → server: cast a vote, or `null` to retract (same as deselecting). */
 export type VoteSubmitPayload = {
-  value: VoteChoice;
+  value: VoteChoice | null;
 };
 
 /** One participant as broadcast to the room. */

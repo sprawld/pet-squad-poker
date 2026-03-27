@@ -70,6 +70,17 @@
     return me.vote;
   });
 
+  const meParticipant = $derived.by(() => {
+    if (!clientSocketId) return undefined;
+    return participants.find((p) => p.socketId === clientSocketId);
+  });
+
+  const headerUserName = $derived(
+    meParticipant?.displayName ?? pendingJoin?.displayName ?? displayName,
+  );
+
+  const headerUserSeed = $derived(meParticipant?.seed ?? seed);
+
   function emitJoinIfPending() {
     if (pendingJoin && joined) {
       socket.emit('room:join', pendingJoin);
@@ -168,7 +179,11 @@
   }
 
   function submitVote(value: VoteChoice) {
-    socket.emit('vote:submit', { value });
+    if (myVote === value) {
+      socket.emit('vote:submit', { value: null });
+    } else {
+      socket.emit('vote:submit', { value });
+    }
   }
 
   function voteLabel(p: RoomParticipant, phase: VotePhase): string {
@@ -250,6 +265,10 @@
         <h1 id="room-live-title" class="room-title">
           <span class="room-title-name">{roomName}</span><span class="room-title-suffix"> Poker</span>
         </h1>
+        <div class="room-user-bar">
+          <Avatar seed={headerUserSeed} size={44} alt="" />
+          <span class="room-user-name">{headerUserName}</span>
+        </div>
       </header>
       <p class="lede">
         After <strong>Start Voting</strong>, picks stay hidden until <strong>Reveal Votes</strong>. While
@@ -338,13 +357,11 @@
     font-weight: 500;
     color: var(--text-h);
     background: color-mix(in srgb, #f59e0b 18%, var(--code-bg));
-    border-bottom: 1px solid color-mix(in srgb, #f59e0b 45%, var(--border));
   }
 
   @media (prefers-color-scheme: dark) {
     .connection-warning {
       background: color-mix(in srgb, #f59e0b 22%, var(--code-bg));
-      border-bottom-color: color-mix(in srgb, #f59e0b 35%, var(--border));
     }
   }
 
@@ -374,18 +391,59 @@
   }
 
   .room-header {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 0.75rem 1rem;
     margin: 0 0 1rem;
-    text-align: center;
   }
 
   .room-title {
+    grid-column: 2;
+    justify-self: center;
     margin: 0;
+    max-width: 100%;
+    text-align: center;
     font-family: var(--heading, system-ui, sans-serif);
     font-size: clamp(2rem, 5.5vw, 3.25rem);
     font-weight: 700;
     line-height: 1.1;
     letter-spacing: -0.03em;
     color: var(--text-h);
+  }
+
+  .room-user-bar {
+    grid-column: 3;
+    justify-self: end;
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    min-width: 0;
+  }
+
+  .room-user-bar :global(img) {
+    box-shadow: none;
+  }
+
+  .room-user-name {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-h);
+    max-width: min(12rem, 28vw);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  @media (max-width: 560px) {
+    .room-title {
+      font-size: clamp(1.5rem, 5.2vw, 2.35rem);
+    }
+
+    .room-user-name {
+      max-width: 6.5rem;
+      font-size: 0.88rem;
+    }
   }
 
   .room-title-name {

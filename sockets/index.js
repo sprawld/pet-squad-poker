@@ -225,6 +225,17 @@ export function connect(io) {
       if (!roomParticipants.get(roomId)?.has(socket.id)) return;
 
       const phase = votePhase.get(roomId);
+      const val =
+        payload && typeof payload === 'object' ? payload.value : undefined;
+
+      /** Retract vote (must run before idle→voting bootstrap). */
+      if (val === null) {
+        if (phase !== 'voting' && phase !== 'revealed') return;
+        votes.get(roomId)?.set(socket.id, null);
+        emitRoomState(io, roomId);
+        return;
+      }
+
       // idle: first pick starts a hidden round (clears votes).
       // voting: update hidden vote.
       // revealed: update vote in the open; everyone sees changes live.
@@ -235,8 +246,6 @@ export function connect(io) {
         return;
       }
 
-      const val =
-        payload && typeof payload === 'object' ? payload.value : undefined;
       if (val === 'abstain') {
         votes.get(roomId)?.set(socket.id, 'abstain');
       } else if (typeof val === 'number' && ALLOWED_VOTES.has(val)) {
