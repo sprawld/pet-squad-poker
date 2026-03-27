@@ -290,53 +290,22 @@
       </div>
     </section>
   {:else}
-    <section class="card room" aria-labelledby="room-live-title">
-      <header class="room-header">
-        <div class="room-header-start">
-          <CopyRoomLink roomName={roomName} />
-        </div>
-        <h1 id="room-live-title" class="room-title">
-          <span class="room-title-name">{roomName}</span><span class="room-title-suffix"> Poker</span>
-        </h1>
-        <div class="room-user-bar">
-          <Avatar seed={headerUserSeed} size={44} alt="" />
-          <span class="room-user-name">{headerUserName}</span>
+    <section class="room-view" aria-labelledby="room-live-title">
+      <header class="room-header-full">
+        <div class="room-header">
+          <div class="room-header-start">
+            <CopyRoomLink roomName={roomName} />
+          </div>
+          <h1 id="room-live-title" class="room-title">
+            <span class="room-title-name">{roomName}</span><span class="room-title-suffix"> Poker</span>
+          </h1>
+          <div class="room-user-bar">
+            <span class="room-user-name">{headerUserName}</span>
+            <Avatar seed={headerUserSeed} size={44} alt="" />
+          </div>
         </div>
       </header>
-      <p class="lede">
-        After <strong>Start Voting</strong>, picks stay hidden until <strong>Reveal Votes</strong>. While
-        revealed, everyone sees votes and any changes live.
-      </p>
-
-      <div class="vote-toolbar">
-        <button
-          type="button"
-          class="btn primary vote-toggle"
-          disabled={connection !== 'connected'}
-          onclick={toggleRevealOrStart}
-        >
-          {#if votePhase === 'voting'}
-            Reveal Votes
-          {:else}
-            Start Voting
-          {/if}
-        </button>
-      </div>
-      <p class="phase-hint" aria-live="polite">
-        {#if votePhase === 'voting'}
-          Hidden round — others can&apos;t see your pick until you reveal.
-        {:else if votePhase === 'revealed'}
-          Open round — votes are visible; change your card and everyone sees it.
-        {:else}
-          Idle — Start Voting or pick a card to begin a hidden round.
-        {/if}
-      </p>
-      {#if votePhase === 'voting' && voteProgress}
-        <p class="vote-progress" aria-live="polite">
-          {voteProgress.cast} of {voteProgress.total} participants have voted
-        </p>
-      {/if}
-
+      <div class="room-body">
       {#if connection === 'connected'}
         <div class="vote-abstain-row">
           <button
@@ -367,7 +336,7 @@
             onclick={() => submitVote(COFFEE_VOTE)}
             aria-label="Coffee break"
           >
-            <Coffee class="vote-card-coffee-icon" size={33} strokeWidth={3.375} aria-hidden="true" />
+            <Coffee class="vote-card-coffee-icon" size={33} strokeWidth={2} aria-hidden="true" />
           </button>
           {#each VOTE_VALUES as v (v)}
             <button
@@ -389,51 +358,76 @@
             ∞
           </button>
         </div>
+        <div class="vote-toolbar">
+          <button
+            type="button"
+            class="btn primary vote-toggle"
+            disabled={connection !== 'connected'}
+            onclick={toggleRevealOrStart}
+          >
+            {#if votePhase === 'voting'}
+              Reveal Votes
+            {:else}
+              Start Voting
+            {/if}
+          </button>
+        </div>
       {/if}
 
-      {#if participants.length === 0}
-        <h2 class="subheading">Participants</h2>
-        <p class="empty">No one here yet — or reconnecting…</p>
-      {:else}
-        {#if participantsAbstain.length > 0}
-          <ul class="participants participants-non-voters">
-            {#each participantsAbstain as p (p.socketId)}
-              <li class="participant">
-                <Avatar seed={p.seed} size={56} alt="" />
-                <span class="participant-name">{p.displayName}</span>
-                <ParticipantVoteCard
-                  participant={p}
-                  votePhase={votePhase}
-                  ariaLabel={`${p.displayName}: ${voteLabel(p, votePhase)}`}
-                />
-              </li>
-            {/each}
-          </ul>
-        {/if}
-        <h2
-          class="subheading"
-          class:subheading-after-nonvoters={participantsAbstain.length > 0}
-        >
-          Participants
-        </h2>
-        {#if participantsVoters.length === 0}
-          <p class="empty">No one is voting yet.</p>
-        {:else}
-          <ul class="participants">
-            {#each participantsVoters as p (p.socketId)}
-              <li class="participant">
-                <Avatar seed={p.seed} size={56} alt="" />
-                <span class="participant-name">{p.displayName}</span>
-                <ParticipantVoteCard
-                  participant={p}
-                  votePhase={votePhase}
-                  ariaLabel={`${p.displayName}: ${voteLabel(p, votePhase)}`}
-                />
-              </li>
-            {/each}
-          </ul>
-        {/if}
-      {/if}
+      <div
+        class="participants-panel"
+        class:participants-panel--voting={votePhase === 'voting'}
+        class:participants-panel--revealed={votePhase === 'revealed'}
+      >
+        <header class="participants-panel-head">
+          <h2 class="participants-panel-title">Participants</h2>
+          {#if votePhase === 'voting' && voteProgress}
+            <p class="participants-panel-progress" aria-live="polite">
+              {voteProgress.cast} of {voteProgress.total} voted
+            </p>
+          {/if}
+        </header>
+        <div class="participants-panel-body">
+          {#if participants.length === 0}
+            <p class="empty">No one here yet — or reconnecting…</p>
+          {:else}
+            {#if participantsAbstain.length > 0}
+              <ul class="participants participants-non-voters">
+                {#each participantsAbstain as p (p.socketId)}
+                  <li class="participant">
+                    <Avatar seed={p.seed} size={56} alt="" />
+                    <span class="participant-name">{p.displayName}</span>
+                    <ParticipantVoteCard
+                      participant={p}
+                      votePhase={votePhase}
+                      ariaLabel={`${p.displayName}: ${voteLabel(p, votePhase)}`}
+                    />
+                  </li>
+                {/each}
+              </ul>
+            {/if}
+            {#if participantsAbstain.length > 0 && participantsVoters.length > 0}
+              <h3 class="participants-subgroup">Voting</h3>
+            {/if}
+            {#if participantsVoters.length > 0}
+              <ul class="participants">
+                {#each participantsVoters as p (p.socketId)}
+                  <li class="participant">
+                    <Avatar seed={p.seed} size={56} alt="" />
+                    <span class="participant-name">{p.displayName}</span>
+                    <ParticipantVoteCard
+                      participant={p}
+                      votePhase={votePhase}
+                      ariaLabel={`${p.displayName}: ${voteLabel(p, votePhase)}`}
+                    />
+                  </li>
+                {/each}
+              </ul>
+            {/if}
+          {/if}
+        </div>
+      </div>
+      </div>
     </section>
   {/if}
 </main>
@@ -458,25 +452,50 @@
     flex: 1;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 2rem 1.5rem 3rem;
+    align-items: stretch;
+    justify-content: flex-start;
+    width: 100%;
+    padding: 0;
     box-sizing: border-box;
   }
 
   .card {
+    align-self: center;
     width: 100%;
     max-width: 520px;
     text-align: left;
     padding: 1.5rem 1.75rem 2rem;
+    margin: 2rem 1.5rem 3rem;
     border: 1px solid var(--border);
     border-radius: 12px;
     background: var(--bg);
     box-shadow: var(--shadow);
+    box-sizing: border-box;
   }
 
-  .card.room {
-    max-width: 720px;
+  .room-view {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+    min-height: 0;
+  }
+
+  .room-header-full {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 1rem clamp(1rem, 3vw, 2rem) 1.25rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg);
+  }
+
+  .room-body {
+    width: 100%;
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 1.5rem clamp(1rem, 3vw, 1.5rem) 3rem;
+    box-sizing: border-box;
   }
 
   .room-header {
@@ -484,7 +503,8 @@
     grid-template-columns: 1fr auto 1fr;
     align-items: center;
     gap: 0.75rem 1rem;
-    margin: 0 0 1rem;
+    margin: 0;
+    width: 100%;
   }
 
   .room-header-start {
@@ -531,6 +551,7 @@
   }
 
   .room-user-bar :global(img) {
+    flex-shrink: 0;
     box-shadow: none;
   }
 
@@ -691,8 +712,76 @@
     margin-bottom: 0.25rem;
   }
 
-  .subheading.subheading-after-nonvoters {
-    margin-top: 1rem;
+  .participants-panel {
+    margin-top: 1.5rem;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--code-bg);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    transition:
+      border-color 0.2s ease,
+      box-shadow 0.2s ease,
+      background 0.2s ease;
+  }
+
+  .participants-panel--voting {
+    border-color: var(--accent-border);
+    background: color-mix(in srgb, var(--accent-bg) 55%, var(--code-bg));
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--accent) 12%, transparent),
+      var(--shadow);
+  }
+
+  .participants-panel--revealed {
+    border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .participants-panel--voting {
+      background: color-mix(in srgb, var(--accent-bg) 40%, var(--code-bg));
+    }
+  }
+
+  .participants-panel-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5rem 1rem;
+    padding: 0.85rem 1rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg);
+  }
+
+  .participants-panel--voting .participants-panel-head {
+    border-bottom-color: var(--accent-border);
+  }
+
+  .participants-panel-title {
+    margin: 0;
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: var(--text-h);
+  }
+
+  .participants-panel-progress {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--accent);
+  }
+
+  .participants-panel-body {
+    padding: 1rem;
+  }
+
+  .participants-subgroup {
+    margin: 0.75rem 0 0.5rem;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-h);
   }
 
   .participant-name {
@@ -709,48 +798,35 @@
   }
 
   .vote-toolbar {
-    margin-bottom: 0.5rem;
+    width: 100%;
+    margin-top: 1rem;
   }
 
   .vote-toggle {
     width: 100%;
-    max-width: 20rem;
+    max-width: none;
     align-self: stretch;
     text-align: center;
-  }
-
-  .phase-hint {
-    margin: 0 0 1.25rem;
-    font-size: 0.9rem;
-    color: var(--text);
-    line-height: 1.4;
-  }
-
-  .vote-progress {
-    margin: 0 0 1.25rem;
-    font-size: 0.95rem;
-    font-weight: 600;
-    font-variant-numeric: tabular-nums;
-    color: var(--text-h);
+    box-sizing: border-box;
   }
 
   .vote-abstain-row {
-    display: flex;
-    justify-content: center;
+    width: 100%;
     margin-bottom: 0.85rem;
+  }
+
+  .vote-abstain-btn {
+    width: 100%;
+    max-width: none;
+    align-self: stretch;
+    text-align: center;
+    box-sizing: border-box;
   }
 
   .vote-abstain-btn.selected {
     border-color: var(--accent);
     background: var(--accent-bg);
     box-shadow: inset 0 0 0 2px rgba(170, 59, 255, 0.15);
-  }
-
-  .subheading {
-    font-size: 1.15rem;
-    font-weight: 500;
-    color: var(--text-h);
-    margin: 1.25rem 0 0.75rem;
   }
 
   .vote-cards {
@@ -763,7 +839,8 @@
   }
 
   .vote-card {
-    font: inherit;
+    font-family: inherit;
+    font-size: clamp(1.35rem, 3.8vw, 1.95rem);
     font-weight: 700;
     font-variant-numeric: tabular-nums;
     width: 100%;
@@ -815,14 +892,14 @@
   }
 
   .vote-card-infinity {
-    font-size: clamp(1.25rem, 4.5vw, 1.75rem);
-    font-weight: 700;
+    font-size: clamp(1.55rem, 5vw, 2.15rem);
+    font-weight: 500;
     font-variant-numeric: normal;
     line-height: 1;
   }
 
   .vote-card-unsure {
-    font-size: clamp(1.1rem, 4vw, 1.5rem);
+    font-size: clamp(1.45rem, 4.8vw, 2rem);
     font-weight: 700;
     font-variant-numeric: normal;
   }
