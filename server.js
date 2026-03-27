@@ -10,7 +10,7 @@ const io = new Server(server);
 
 app.use(express.static("./dist"));
 
-io.on("connection", connect);
+io.on("connection", connect(io));
 
 server.listen(port, () =>
   console.log(`Example app listening on http://localhost:${port}!`),
