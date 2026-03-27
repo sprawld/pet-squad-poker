@@ -20,7 +20,7 @@ const roomParticipants = new Map();
 /** Room id → 'idle' | 'voting' | 'revealed' */
 const votePhase = new Map();
 
-/** Room id → socket id → number | 'abstain' | null */
+/** Room id → socket id → number | 'abstain' | 'unsure' | 'coffee' | null */
 const votes = new Map();
 
 /**
@@ -68,7 +68,7 @@ function buildRoomState(roomId, forSocketId) {
   if (pmap) {
     for (const [socketId, { displayName, seed }] of pmap) {
       const raw = voteMap.get(socketId) ?? null;
-      /** @type {number | 'abstain' | null | 'hidden'} */
+      /** @type {number | 'abstain' | 'unsure' | 'coffee' | null | 'hidden'} */
       let vote;
       if (phase === 'idle') {
         vote = null;
@@ -248,6 +248,10 @@ export function connect(io) {
 
       if (val === 'abstain') {
         votes.get(roomId)?.set(socket.id, 'abstain');
+      } else if (val === 'unsure') {
+        votes.get(roomId)?.set(socket.id, 'unsure');
+      } else if (val === 'coffee') {
+        votes.get(roomId)?.set(socket.id, 'coffee');
       } else if (typeof val === 'number' && ALLOWED_VOTES.has(val)) {
         votes.get(roomId)?.set(socket.id, val);
       } else {

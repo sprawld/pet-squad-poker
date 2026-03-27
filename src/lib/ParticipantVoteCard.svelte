@@ -20,6 +20,8 @@
     if (votePhase === 'revealed') {
       if (p.vote === null || p.vote === 'hidden') return '—';
       if (p.vote === 'abstain') return 'Pass';
+      if (p.vote === 'unsure') return '?';
+      if (p.vote === 'coffee') return '☕';
       return String(p.vote);
     }
     return '—';

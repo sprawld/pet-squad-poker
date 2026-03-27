@@ -61,3 +61,12 @@ export function buildRoomUrl(roomName: string): string {
   history.replaceState({}, '', url);
   return url.toString();
 }
+
+/**
+ * Shareable URL for a room (does not change `history`).
+ */
+export function getRoomShareUrl(roomName: string): string {
+  const url = new URL(window.location.href);
+  url.searchParams.set(ROOM_QUERY_PARAM, encodeRoomName(roomName.trim()));
+  return url.toString();
+}

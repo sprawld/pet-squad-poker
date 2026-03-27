@@ -1,6 +1,7 @@
 <script lang="ts">
   import { io, type Socket } from 'socket.io-client';
   import Avatar from './lib/Avatar.svelte';
+  import CopyRoomLink from './lib/CopyRoomLink.svelte';
   import ParticipantVoteCard from './lib/ParticipantVoteCard.svelte';
   import {
     ROOM_QUERY_PARAM,
@@ -8,7 +9,8 @@
     buildRoomUrl,
     MAX_ROOM_NAME_LENGTH,
   } from './lib/roomUrl';
-  import { VOTE_VALUES } from './lib/voteConstants';
+  import { Coffee } from 'lucide-svelte';
+  import { COFFEE_VOTE, UNSURE_VOTE, VOTE_VALUES } from './lib/voteConstants';
   import type {
     RoomJoinPayload,
     RoomParticipant,
@@ -194,6 +196,8 @@
     }
     if (p.vote === null) return '—';
     if (p.vote === 'abstain') return 'Abstain';
+    if (p.vote === 'unsure') return '? (not joining)';
+    if (p.vote === 'coffee') return 'Coffee';
     return String(p.vote);
   }
 </script>
@@ -231,7 +235,10 @@
     </section>
   {:else if !joined}
     <section class="card" aria-labelledby="join-title">
-      <p class="room-pill">Room: <strong>{roomName}</strong></p>
+      <div class="join-room-bar">
+        <p class="room-pill">Room: <strong>{roomName}</strong></p>
+        <CopyRoomLink roomName={roomName} />
+      </div>
       <h1 id="join-title">Join the table</h1>
       <p class="lede">Pick a display name and an avatar. You can reroll the avatar before joining.</p>
       <div class="join-grid">
@@ -262,6 +269,9 @@
   {:else}
     <section class="card room" aria-labelledby="room-live-title">
       <header class="room-header">
+        <div class="room-header-start">
+          <CopyRoomLink roomName={roomName} />
+        </div>
         <h1 id="room-live-title" class="room-title">
           <span class="room-title-name">{roomName}</span><span class="room-title-suffix"> Poker</span>
         </h1>
@@ -306,6 +316,24 @@
 
       {#if connection === 'connected'}
         <div class="vote-cards" role="group" aria-label="Story point cards">
+          <button
+            type="button"
+            class="vote-card vote-card-unsure"
+            class:selected={myVote === UNSURE_VOTE}
+            onclick={() => submitVote(UNSURE_VOTE)}
+            aria-label="Not joining this round (shown as question mark)"
+          >
+            ?
+          </button>
+          <button
+            type="button"
+            class="vote-card vote-card-coffee"
+            class:selected={myVote === COFFEE_VOTE}
+            onclick={() => submitVote(COFFEE_VOTE)}
+            aria-label="Coffee break"
+          >
+            <Coffee class="vote-card-coffee-icon" size={22} strokeWidth={2.25} aria-hidden="true" />
+          </button>
           {#each VOTE_VALUES as v (v)}
             <button
               type="button"
@@ -318,7 +346,7 @@
           {/each}
           <button
             type="button"
-            class="vote-card abstain"
+            class="vote-card vote-card-abstain"
             class:selected={myVote === 'abstain'}
             onclick={() => submitVote('abstain')}
           >
@@ -396,6 +424,26 @@
     align-items: center;
     gap: 0.75rem 1rem;
     margin: 0 0 1rem;
+  }
+
+  .room-header-start {
+    grid-column: 1;
+    justify-self: start;
+    align-self: start;
+    min-width: 0;
+  }
+
+  .join-room-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin: 0 0 0.75rem;
+  }
+
+  .join-room-bar .room-pill {
+    margin: 0;
   }
 
   .room-title {
@@ -626,10 +674,11 @@
 
   .vote-cards {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(3.75rem, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-rows: repeat(2, auto);
     gap: 0.65rem;
     margin-bottom: 1.5rem;
-    justify-items: center;
+    align-items: stretch;
   }
 
   .vote-card {
@@ -637,7 +686,7 @@
     font-weight: 700;
     font-variant-numeric: tabular-nums;
     width: 100%;
-    max-width: 4.5rem;
+    max-width: none;
     aspect-ratio: 5 / 7;
     padding: 0;
     border-radius: 0.4rem;
@@ -684,13 +733,30 @@
       0 4px 16px rgba(170, 59, 255, 0.2);
   }
 
-  .vote-card.abstain {
-    grid-column: 1 / -1;
-    max-width: 100%;
-    aspect-ratio: auto;
-    min-height: 2.75rem;
-    padding: 0.5rem 1rem;
+  .vote-card-abstain {
     font-weight: 600;
-    font-size: 0.88rem;
+    font-size: 0.62rem;
+    line-height: 1.15;
+    padding: 0.2rem 0.15rem;
+    font-variant-numeric: normal;
+  }
+
+  .vote-card-unsure {
+    font-size: clamp(1.1rem, 4vw, 1.5rem);
+    font-weight: 700;
+    font-variant-numeric: normal;
+  }
+
+  .vote-card-coffee {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    font-variant-numeric: normal;
+  }
+
+  .vote-card-coffee :global(.vote-card-coffee-icon) {
+    color: var(--accent);
+    flex-shrink: 0;
   }
 </style>

@@ -24,6 +24,7 @@
     "@dicebear/collection": "^9.4.2",
     "@dicebear/core": "^9.4.2",
     "express": "^5.1.0",
+    "lucide-svelte": "^1.0.1",
     "socket.io": "^4.8.1",
     "socket.io-client": "^4.8.1"
   }

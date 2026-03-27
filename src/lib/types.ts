@@ -9,8 +9,8 @@ export type RoomJoinPayload = {
 
 export type VotePhase = 'idle' | 'voting' | 'revealed';
 
-/** A committed choice (number or abstain). */
-export type VoteChoice = VoteCard | 'abstain';
+/** A committed choice: number, abstain, unsure (?), or coffee. */
+export type VoteChoice = VoteCard | 'abstain' | 'unsure' | 'coffee';
 
 /**
  * What the UI may show per participant: real choice, not voted yet, or
@@ -31,7 +31,7 @@ export type RoomParticipant = {
   vote: VoteDisplay;
 };
 
-/** During `voting` only: how many people have locked in a pick (including abstain). */
+/** During `voting` only: how many people have locked in a pick (numbers, abstain, or unsure). */
 export type VoteProgress = {
   cast: number;
   total: number;
