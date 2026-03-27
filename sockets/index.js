@@ -212,10 +212,13 @@ export function connect(io) {
       if (!roomParticipants.get(roomId)?.has(socket.id)) return;
 
       const phase = votePhase.get(roomId);
-      if (phase === 'idle' || phase === 'revealed') {
+      // idle: first pick starts a hidden round (clears votes).
+      // voting: update hidden vote.
+      // revealed: update vote in the open; everyone sees changes live.
+      if (phase === 'idle') {
         votePhase.set(roomId, 'voting');
         clearRoomVotes(roomId);
-      } else if (phase !== 'voting') {
+      } else if (phase !== 'voting' && phase !== 'revealed') {
         return;
       }
 

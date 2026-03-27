@@ -1,6 +1,7 @@
 <script lang="ts">
   import { io, type Socket } from 'socket.io-client';
   import Avatar from './lib/Avatar.svelte';
+  import ParticipantVoteCard from './lib/ParticipantVoteCard.svelte';
   import {
     ROOM_QUERY_PARAM,
     decodeRoomParam,
@@ -180,18 +181,17 @@
   }
 </script>
 
-<p class="socket-status" data-state={connection}>
-  Socket:
-  {#if connection === 'connecting'}
-    connecting…
-  {:else if connection === 'connected'}
-    connected
-  {:else if connection === 'disconnected'}
-    disconnected — reconnecting when available
-  {:else}
-    connection error
-  {/if}
-</p>
+{#if connection !== 'connected'}
+  <aside class="connection-warning" role="status">
+    {#if connection === 'connecting'}
+      Connecting…
+    {:else if connection === 'disconnected'}
+      Disconnected — reconnecting when available.
+    {:else}
+      Connection error — check your network and try again.
+    {/if}
+  </aside>
+{/if}
 
 <main class="poker">
   {#if roomName === null}
@@ -244,14 +244,14 @@
     </section>
   {:else}
     <section class="card room" aria-labelledby="room-live-title">
-      <p class="room-pill">Room: <strong>{roomName}</strong></p>
-      <h1 id="room-live-title">Planning poker</h1>
+      <header class="room-header">
+        <h1 id="room-live-title" class="room-title">
+          <span class="room-title-name">{roomName}</span><span class="room-title-suffix"> Poker</span>
+        </h1>
+      </header>
       <p class="lede">
-        {#if connection !== 'connected'}
-          You are offline; the list will refresh when the connection returns.
-        {:else}
-          Pick a card anytime; use the button to hide everyone&apos;s votes or reveal them.
-        {/if}
+        After <strong>Start Voting</strong>, picks stay hidden until <strong>Reveal Votes</strong>. While
+        revealed, everyone sees votes and any changes live.
       </p>
 
       <div class="vote-toolbar">
@@ -270,11 +270,11 @@
       </div>
       <p class="phase-hint" aria-live="polite">
         {#if votePhase === 'voting'}
-          Votes are hidden from others until you reveal.
+          Hidden round — others can&apos;t see your pick until you reveal.
         {:else if votePhase === 'revealed'}
-          Votes are visible. Start Voting begins a new hidden round.
+          Open round — votes are visible; change your card and everyone sees it.
         {:else}
-          Choose a card to start a hidden round, or press Start Voting to reset the round.
+          Idle — Start Voting or pick a card to begin a hidden round.
         {/if}
       </p>
 
@@ -308,9 +308,14 @@
         <ul class="participants">
           {#each participants as p (p.socketId)}
             <li class="participant">
-              <Avatar seed={p.seed} size={64} alt="" />
+              <Avatar seed={p.seed} size={56} alt="" />
               <span class="participant-name">{p.displayName}</span>
-              <span class="participant-vote" title="Vote">{voteLabel(p, votePhase)}</span>
+              <ParticipantVoteCard
+                participant={p}
+                votePhase={votePhase}
+                isSelf={p.socketId === clientSocketId}
+                ariaLabel={`${p.displayName} vote: ${voteLabel(p, votePhase)}`}
+              />
             </li>
           {/each}
         </ul>
@@ -320,6 +325,23 @@
 </main>
 
 <style>
+  .connection-warning {
+    margin: 0;
+    padding: 0.65rem 1.25rem;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text-h);
+    background: color-mix(in srgb, #f59e0b 18%, var(--code-bg));
+    border-bottom: 1px solid color-mix(in srgb, #f59e0b 45%, var(--border));
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .connection-warning {
+      background: color-mix(in srgb, #f59e0b 22%, var(--code-bg));
+      border-bottom-color: color-mix(in srgb, #f59e0b 35%, var(--border));
+    }
+  }
+
   .poker {
     flex: 1;
     display: flex;
@@ -345,7 +367,31 @@
     max-width: 720px;
   }
 
-  .card h1 {
+  .room-header {
+    margin: 0 0 1rem;
+    text-align: center;
+  }
+
+  .room-title {
+    margin: 0;
+    font-family: var(--heading, system-ui, sans-serif);
+    font-size: clamp(2rem, 5.5vw, 3.25rem);
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.03em;
+    color: var(--text-h);
+  }
+
+  .room-title-name {
+    color: var(--accent);
+  }
+
+  .room-title-suffix {
+    font-weight: 700;
+    color: var(--text-h);
+  }
+
+  .card h1:not(.room-title) {
     font-size: 1.75rem;
     margin: 0 0 0.5rem;
   }
@@ -462,14 +508,16 @@
     display: flex;
     align-items: center;
     gap: 1rem;
-    padding: 0.5rem 0.75rem;
+    padding: 0.65rem 0.85rem;
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: 12px;
     background: var(--code-bg);
   }
 
   .participant-name {
-    font-weight: 500;
+    flex: 1;
+    min-width: 0;
+    font-weight: 600;
     color: var(--text-h);
   }
 
@@ -506,48 +554,71 @@
 
   .vote-cards {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
-    gap: 0.5rem;
+    grid-template-columns: repeat(auto-fill, minmax(3.75rem, 1fr));
+    gap: 0.65rem;
     margin-bottom: 1.5rem;
+    justify-items: center;
   }
 
   .vote-card {
     font: inherit;
-    font-weight: 600;
+    font-weight: 700;
     font-variant-numeric: tabular-nums;
-    min-height: 2.75rem;
-    padding: 0.4rem 0.5rem;
-    border-radius: 8px;
+    width: 100%;
+    max-width: 4.5rem;
+    aspect-ratio: 5 / 7;
+    padding: 0;
+    border-radius: 0.4rem;
     border: 2px solid var(--border);
-    background: var(--code-bg);
+    background: linear-gradient(180deg, #faf8ff 0%, #f0ecf8 100%);
     color: var(--text-h);
     cursor: pointer;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.5),
+      0 4px 14px rgba(0, 0, 0, 0.08);
     transition:
       border-color 0.15s,
-      background 0.15s;
+      background 0.15s,
+      transform 0.12s ease,
+      box-shadow 0.15s;
   }
 
-  .vote-card:hover {
+  @media (prefers-color-scheme: dark) {
+    .vote-card {
+      background: linear-gradient(180deg, #2c2f3a 0%, #22252e 100%);
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.06),
+        0 4px 14px rgba(0, 0, 0, 0.35);
+    }
+  }
+
+  .vote-card:hover:not(:disabled) {
     border-color: var(--accent-border);
+    transform: translateY(-2px);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.5),
+      0 8px 20px rgba(0, 0, 0, 0.12);
+  }
+
+  .vote-card:active:not(:disabled) {
+    transform: translateY(0);
   }
 
   .vote-card.selected {
     border-color: var(--accent);
     background: var(--accent-bg);
+    box-shadow:
+      inset 0 0 0 2px rgba(170, 59, 255, 0.2),
+      0 4px 16px rgba(170, 59, 255, 0.2);
   }
 
   .vote-card.abstain {
     grid-column: 1 / -1;
-    font-weight: 500;
-    font-size: 0.9rem;
-  }
-
-  .participant-vote {
-    margin-left: auto;
-    min-width: 3rem;
-    text-align: right;
-    font-variant-numeric: tabular-nums;
+    max-width: 100%;
+    aspect-ratio: auto;
+    min-height: 2.75rem;
+    padding: 0.5rem 1rem;
     font-weight: 600;
-    color: var(--accent);
+    font-size: 0.88rem;
   }
 </style>
