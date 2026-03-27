@@ -7,7 +7,14 @@
     buildRoomUrl,
     MAX_ROOM_NAME_LENGTH,
   } from './lib/roomUrl';
-  import type { RoomJoinPayload, RoomParticipant, RoomStatePayload } from './lib/types';
+  import { VOTE_VALUES } from './lib/voteConstants';
+  import type {
+    RoomJoinPayload,
+    RoomParticipant,
+    RoomStatePayload,
+    VoteChoice,
+    VotePhase,
+  } from './lib/types';
 
   const socket: Socket = io();
 
@@ -24,7 +31,16 @@
   let seed = $state(crypto.randomUUID());
   let joined = $state(false);
   let participants = $state<RoomParticipant[]>([]);
+  let votePhase = $state<VotePhase>('idle');
+  let clientSocketId = $state<string | undefined>(undefined);
   let pendingJoin = $state<RoomJoinPayload | null>(null);
+
+  const myVote = $derived.by(() => {
+    if (!clientSocketId) return null;
+    const me = participants.find((p) => p.socketId === clientSocketId);
+    if (!me || me.vote === 'hidden') return null;
+    return me.vote;
+  });
 
   function emitJoinIfPending() {
     if (pendingJoin && joined) {
@@ -34,12 +50,14 @@
 
   socket.on('connect', () => {
     connection = 'connected';
+    clientSocketId = socket.id;
     emitJoinIfPending();
   });
 
   socket.on('disconnect', () => {
     connection = 'disconnected';
     participants = [];
+    votePhase = 'idle';
   });
 
   socket.on('connect_error', (err: Error) => {
@@ -48,6 +66,7 @@
 
   socket.on('room:state', (payload: RoomStatePayload) => {
     participants = payload.participants;
+    votePhase = payload.votePhase;
   });
 
   function submitRoomName(e: SubmitEvent) {
@@ -75,6 +94,40 @@
     pendingJoin = payload;
     socket.emit('room:join', payload);
     joined = true;
+  }
+
+  /** Hide all votes and start a fresh round (same as server `vote:start`). */
+  function startVoting() {
+    socket.emit('vote:start');
+  }
+
+  function revealVotes() {
+    socket.emit('vote:reveal');
+  }
+
+  function toggleRevealOrStart() {
+    if (votePhase === 'voting') {
+      revealVotes();
+    } else {
+      startVoting();
+    }
+  }
+
+  function submitVote(value: VoteChoice) {
+    socket.emit('vote:submit', { value });
+  }
+
+  function voteLabel(p: RoomParticipant, phase: VotePhase): string {
+    if (phase === 'idle') return '—';
+    if (phase === 'voting') {
+      if (p.vote === 'hidden') return '?';
+      if (p.vote === null) return '…';
+      if (p.vote === 'abstain') return 'Abstain';
+      return String(p.vote);
+    }
+    if (p.vote === null) return '—';
+    if (p.vote === 'abstain') return 'Abstain';
+    return String(p.vote);
   }
 </script>
 
@@ -143,22 +196,72 @@
   {:else}
     <section class="card room" aria-labelledby="room-live-title">
       <p class="room-pill">Room: <strong>{roomName}</strong></p>
-      <h1 id="room-live-title">Participants</h1>
+      <h1 id="room-live-title">Planning poker</h1>
       <p class="lede">
         {#if connection !== 'connected'}
           You are offline; the list will refresh when the connection returns.
         {:else}
-          Everyone in this room right now (updates live).
+          Pick a card anytime; use the button to hide everyone&apos;s votes or reveal them.
         {/if}
       </p>
+
+      <div class="vote-toolbar">
+        <button
+          type="button"
+          class="btn primary vote-toggle"
+          disabled={connection !== 'connected'}
+          onclick={toggleRevealOrStart}
+        >
+          {#if votePhase === 'voting'}
+            Reveal Votes
+          {:else}
+            Start Voting
+          {/if}
+        </button>
+      </div>
+      <p class="phase-hint" aria-live="polite">
+        {#if votePhase === 'voting'}
+          Votes are hidden from others until you reveal.
+        {:else if votePhase === 'revealed'}
+          Votes are visible. Start Voting begins a new hidden round.
+        {:else}
+          Choose a card to start a hidden round, or press Start Voting to reset the round.
+        {/if}
+      </p>
+
+      {#if connection === 'connected'}
+        <div class="vote-cards" role="group" aria-label="Story point cards">
+          {#each VOTE_VALUES as v (v)}
+            <button
+              type="button"
+              class="vote-card"
+              class:selected={myVote === v}
+              onclick={() => submitVote(v)}
+            >
+              {v}
+            </button>
+          {/each}
+          <button
+            type="button"
+            class="vote-card abstain"
+            class:selected={myVote === 'abstain'}
+            onclick={() => submitVote('abstain')}
+          >
+            I'm not voting
+          </button>
+        </div>
+      {/if}
+
+      <h2 class="subheading">Participants</h2>
       {#if participants.length === 0}
-        <p class="empty">No one else here yet — or reconnecting…</p>
+        <p class="empty">No one here yet — or reconnecting…</p>
       {:else}
         <ul class="participants">
           {#each participants as p (p.socketId)}
             <li class="participant">
               <Avatar seed={p.seed} size={64} alt="" />
               <span class="participant-name">{p.displayName}</span>
+              <span class="participant-vote" title="Vote">{voteLabel(p, votePhase)}</span>
             </li>
           {/each}
         </ul>
@@ -187,6 +290,10 @@
     border-radius: 12px;
     background: var(--bg);
     box-shadow: var(--shadow);
+  }
+
+  .card.room {
+    max-width: 720px;
   }
 
   .card h1 {
@@ -321,5 +428,77 @@
     margin: 0;
     color: var(--text);
     font-style: italic;
+  }
+
+  .vote-toolbar {
+    margin-bottom: 0.5rem;
+  }
+
+  .vote-toggle {
+    width: 100%;
+    max-width: 20rem;
+    align-self: stretch;
+    text-align: center;
+  }
+
+  .phase-hint {
+    margin: 0 0 1.25rem;
+    font-size: 0.9rem;
+    color: var(--text);
+    line-height: 1.4;
+  }
+
+  .subheading {
+    font-size: 1.15rem;
+    font-weight: 500;
+    color: var(--text-h);
+    margin: 1.25rem 0 0.75rem;
+  }
+
+  .vote-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .vote-card {
+    font: inherit;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    min-height: 2.75rem;
+    padding: 0.4rem 0.5rem;
+    border-radius: 8px;
+    border: 2px solid var(--border);
+    background: var(--code-bg);
+    color: var(--text-h);
+    cursor: pointer;
+    transition:
+      border-color 0.15s,
+      background 0.15s;
+  }
+
+  .vote-card:hover {
+    border-color: var(--accent-border);
+  }
+
+  .vote-card.selected {
+    border-color: var(--accent);
+    background: var(--accent-bg);
+  }
+
+  .vote-card.abstain {
+    grid-column: 1 / -1;
+    font-weight: 500;
+    font-size: 0.9rem;
+  }
+
+  .participant-vote {
+    margin-left: auto;
+    min-width: 3rem;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    color: var(--accent);
   }
 </style>
