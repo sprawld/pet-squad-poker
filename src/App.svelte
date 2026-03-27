@@ -15,6 +15,7 @@
     RoomStatePayload,
     VoteChoice,
     VotePhase,
+    VoteProgress,
   } from './lib/types';
   import { loadSavedProfile, saveProfile } from './lib/localProfile';
 
@@ -54,6 +55,7 @@
   let joined = $state(joinWithSavedProfileNow);
   let participants = $state<RoomParticipant[]>([]);
   let votePhase = $state<VotePhase>('idle');
+  let voteProgress = $state<VoteProgress | null>(null);
   let clientSocketId = $state<string | undefined>(undefined);
   let pendingJoin = $state<RoomJoinPayload | null>(initialAutoJoinPayload);
 
@@ -86,6 +88,7 @@
     connection = 'disconnected';
     participants = [];
     votePhase = 'idle';
+    voteProgress = null;
   });
 
   socket.on('connect_error', (err: Error) => {
@@ -95,6 +98,7 @@
   socket.on('room:state', (payload: RoomStatePayload) => {
     participants = payload.participants;
     votePhase = payload.votePhase;
+    voteProgress = payload.voteProgress;
   });
 
   if (socket.connected) {
@@ -170,10 +174,8 @@
   function voteLabel(p: RoomParticipant, phase: VotePhase): string {
     if (phase === 'idle') return '—';
     if (phase === 'voting') {
-      if (p.vote === 'hidden') return '?';
-      if (p.vote === null) return '…';
-      if (p.vote === 'abstain') return 'Abstain';
-      return String(p.vote);
+      if (p.vote === null) return 'not voted yet';
+      return 'voted'; // no value while hidden (including your own pick)
     }
     if (p.vote === null) return '—';
     if (p.vote === 'abstain') return 'Abstain';
@@ -277,6 +279,11 @@
           Idle — Start Voting or pick a card to begin a hidden round.
         {/if}
       </p>
+      {#if votePhase === 'voting' && voteProgress}
+        <p class="vote-progress" aria-live="polite">
+          {voteProgress.cast} of {voteProgress.total} participants have voted
+        </p>
+      {/if}
 
       {#if connection === 'connected'}
         <div class="vote-cards" role="group" aria-label="Story point cards">
@@ -313,8 +320,7 @@
               <ParticipantVoteCard
                 participant={p}
                 votePhase={votePhase}
-                isSelf={p.socketId === clientSocketId}
-                ariaLabel={`${p.displayName} vote: ${voteLabel(p, votePhase)}`}
+                ariaLabel={`${p.displayName}: ${voteLabel(p, votePhase)}`}
               />
             </li>
           {/each}
@@ -543,6 +549,14 @@
     font-size: 0.9rem;
     color: var(--text);
     line-height: 1.4;
+  }
+
+  .vote-progress {
+    margin: 0 0 1.25rem;
+    font-size: 0.95rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-h);
   }
 
   .subheading {

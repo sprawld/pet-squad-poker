@@ -31,8 +31,15 @@ export type RoomParticipant = {
   vote: VoteDisplay;
 };
 
+/** During `voting` only: how many people have locked in a pick (including abstain). */
+export type VoteProgress = {
+  cast: number;
+  total: number;
+};
+
 /** Server → clients: roster + voting phase (payload may be redacted per socket). */
 export type RoomStatePayload = {
   participants: RoomParticipant[];
   votePhase: VotePhase;
+  voteProgress: VoteProgress | null;
 };

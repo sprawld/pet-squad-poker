@@ -4,20 +4,15 @@
   let {
     participant: p,
     votePhase,
-    isSelf,
     ariaLabel,
   }: {
     participant: RoomParticipant;
     votePhase: VotePhase;
-    isSelf: boolean;
     ariaLabel: string;
   } = $props();
 
-  /** True = show value face (after reveal, or your own pick while voting). */
-  const showFront = $derived(
-    votePhase === 'revealed' ||
-      (votePhase === 'voting' && isSelf && p.vote !== null && p.vote !== 'hidden'),
-  );
+  /** Value face only after reveal; while voting everyone sees the back (face-down). */
+  const showFront = $derived(votePhase === 'revealed');
 
   /** Text on the front face (value when visible). */
   const frontText = $derived.by(() => {
@@ -27,19 +22,13 @@
       if (p.vote === 'abstain') return 'Pass';
       return String(p.vote);
     }
-    if (votePhase === 'voting' && isSelf && p.vote !== null && p.vote !== 'hidden') {
-      if (p.vote === 'abstain') return 'Pass';
-      return String(p.vote);
-    }
     return '—';
   });
 
+  /** While voting: "?" until they vote, then plain back (no hint). */
   const backHint = $derived.by(() => {
     if (votePhase === 'idle') return '';
-    if (votePhase === 'voting') {
-      if (p.vote === 'hidden') return '?';
-      if (p.vote === null) return '…';
-    }
+    if (votePhase === 'voting' && p.vote === null) return '?';
     return '';
   });
 </script>

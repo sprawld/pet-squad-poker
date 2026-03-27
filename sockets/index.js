@@ -81,7 +81,20 @@ function buildRoomState(roomId, forSocketId) {
       participants.push({ socketId, displayName, seed, vote });
     }
   }
-  return { participants, votePhase: phase };
+
+  /** @type {{ cast: number, total: number } | null} */
+  let voteProgress = null;
+  if (phase === 'voting' && pmap) {
+    let cast = 0;
+    const total = pmap.size;
+    for (const id of pmap.keys()) {
+      const raw = voteMap.get(id) ?? null;
+      if (raw !== null) cast++;
+    }
+    voteProgress = { cast, total };
+  }
+
+  return { participants, votePhase: phase, voteProgress };
 }
 
 /**
