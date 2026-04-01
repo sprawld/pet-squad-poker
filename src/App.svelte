@@ -18,6 +18,7 @@
     VOTE_VALUES,
   } from './lib/voteConstants';
   import type {
+    PaperThrowPayload,
     RoomJoinPayload,
     RoomParticipant,
     RoomStatePayload,
@@ -26,6 +27,12 @@
     VoteProgress,
   } from './lib/types';
   import { loadSavedProfile, saveProfile } from './lib/localProfile';
+  import {
+    createPaperParticle,
+    stepPaper,
+    type PaperParticle,
+  } from './lib/paperThrow';
+  import { onDestroy } from 'svelte';
 
   const savedProfile = loadSavedProfile();
 
@@ -210,6 +217,78 @@
     participants.filter((p) => p.vote !== 'abstain'),
   );
 
+  let paperParticles = $state<PaperParticle[]>([]);
+  let paperRafId = 0;
+  let lastPaperT = 0;
+
+  function spawnPaperThrow(targetRect: DOMRect) {
+    paperParticles = [...paperParticles, createPaperParticle(targetRect)];
+    if (!paperRafId) {
+      lastPaperT = performance.now();
+      paperRafId = requestAnimationFrame(paperLoop);
+    }
+  }
+
+  function paperLoop() {
+    const now = performance.now();
+    const dt = Math.min((now - lastPaperT) / 1000, 0.048);
+    lastPaperT = now;
+    paperParticles = paperParticles
+      .map((p) => stepPaper(p, dt))
+      .filter((p): p is PaperParticle => p !== null);
+    if (paperParticles.length > 0) {
+      paperRafId = requestAnimationFrame(paperLoop);
+    } else {
+      paperRafId = 0;
+    }
+  }
+
+  function getPaperTargetRect(targetSocketId: string): DOMRect | null {
+    if (typeof document === 'undefined') return null;
+    try {
+      const el = document.querySelector(
+        `[data-paper-target="${CSS.escape(targetSocketId)}"]`,
+      ) as HTMLElement | null;
+      return el?.getBoundingClientRect() ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  function onPaperThrowFromServer(payload: PaperThrowPayload) {
+    const { targetSocketId } = payload;
+    const trySpawn = (): boolean => {
+      const rect = getPaperTargetRect(targetSocketId);
+      if (rect) {
+        spawnPaperThrow(rect);
+        return true;
+      }
+      return false;
+    };
+    if (trySpawn()) return;
+    requestAnimationFrame(() => {
+      if (trySpawn()) return;
+      setTimeout(() => {
+        trySpawn();
+      }, 48);
+    });
+  }
+
+  socket.on('paper:throw', onPaperThrowFromServer);
+
+  /** Local animation + broadcast to everyone else in the room. */
+  function emitLocalPaperThrow(e: MouseEvent, targetSocketId: string) {
+    if (!clientSocketId) return;
+    const el = e.currentTarget as HTMLButtonElement;
+    spawnPaperThrow(el.getBoundingClientRect());
+    socket.emit('paper:throw', { targetSocketId });
+  }
+
+  onDestroy(() => {
+    if (paperRafId) cancelAnimationFrame(paperRafId);
+    socket.off('paper:throw', onPaperThrowFromServer);
+  });
+
   function voteLabel(p: RoomParticipant, phase: VotePhase): string {
     if (phase === 'idle') return '—';
     if (phase === 'voting') {
@@ -302,7 +381,17 @@
           </h1>
           <div class="room-user-bar">
             <span class="room-user-name">{headerUserName}</span>
-            <Avatar seed={headerUserSeed} size={44} alt="" />
+            <button
+              type="button"
+              class="room-user-avatar-hit"
+              onclick={(e) => {
+                if (!clientSocketId) return;
+                emitLocalPaperThrow(e, clientSocketId);
+              }}
+              aria-label="Throw paper at yourself"
+            >
+              <Avatar seed={headerUserSeed} size={44} alt="" />
+            </button>
           </div>
         </div>
       </header>
@@ -398,7 +487,15 @@
               <ul class="participants participants-non-voters">
                 {#each participantsAbstain as p (p.socketId)}
                   <li class="participant">
-                    <Avatar seed={p.seed} size={56} alt="" />
+                    <button
+                      type="button"
+                      class="participant-avatar-hit"
+                      data-paper-target={p.socketId}
+                      onclick={(e) => emitLocalPaperThrow(e, p.socketId)}
+                      aria-label="Throw paper at {p.displayName}"
+                    >
+                      <Avatar seed={p.seed} size={56} alt="" />
+                    </button>
                     <span class="participant-name">{p.displayName}</span>
                     <ParticipantVoteCard
                       participant={p}
@@ -416,7 +513,15 @@
               <ul class="participants">
                 {#each participantsVoters as p (p.socketId)}
                   <li class="participant">
-                    <Avatar seed={p.seed} size={56} alt="" />
+                    <button
+                      type="button"
+                      class="participant-avatar-hit"
+                      data-paper-target={p.socketId}
+                      onclick={(e) => emitLocalPaperThrow(e, p.socketId)}
+                      aria-label="Throw paper at {p.displayName}"
+                    >
+                      <Avatar seed={p.seed} size={56} alt="" />
+                    </button>
                     <span class="participant-name">{p.displayName}</span>
                     <ParticipantVoteCard
                       participant={p}
@@ -437,6 +542,23 @@
       </div>
     </section>
   {/if}
+
+  {#if paperParticles.length > 0}
+    <div class="paper-layer" aria-hidden="true">
+      {#each paperParticles as p (p.id)}
+        <div
+          class="paper-particle"
+          style:left="{p.x}px"
+          style:top="{p.y}px"
+          style:opacity={p.opacity}
+          style:transform="translate(-50%, -50%) rotate({p.rotation}deg)"
+        >
+          𖡎
+        </div>
+      {/each}
+    </div>
+  {/if}
+
 </main>
 
 <style>
@@ -928,4 +1050,44 @@
   .vote-card-coffee.selected :global(.vote-card-coffee-icon) {
     filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
   }
+
+  .room-user-avatar-hit,
+  .participant-avatar-hit {
+    display: inline-flex;
+    padding: 0;
+    margin: 0;
+    border: none;
+    background: transparent;
+    border-radius: 12px;
+    cursor: pointer;
+    flex-shrink: 0;
+    line-height: 0;
+  }
+
+  .room-user-avatar-hit:focus-visible,
+  .participant-avatar-hit:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .paper-layer {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 10050;
+    overflow: hidden;
+  }
+
+  .paper-particle {
+    position: absolute;
+    left: 0;
+    top: 0;
+    font-size: 1.9rem;
+    line-height: 1;
+    font-family: 'Noto Sans Tangut', system-ui, sans-serif;
+    user-select: none;
+    will-change: transform, left, top, opacity;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  }
+
 </style>

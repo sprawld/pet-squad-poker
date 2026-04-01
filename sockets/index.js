@@ -286,6 +286,21 @@ export function connect(io) {
       emitRoomState(io, roomId);
     });
 
+    /** Ephemeral: broadcast paper throw to everyone else in the room (no persistence). */
+    socket.on('paper:throw', (payload) => {
+      const roomId = socket.data.roomId;
+      if (typeof roomId !== 'string') return;
+      const pmap = roomParticipants.get(roomId);
+      if (!pmap?.has(socket.id)) return;
+      const targetSocketId =
+        payload && typeof payload === 'object' && typeof payload.targetSocketId === 'string'
+          ? payload.targetSocketId
+          : null;
+      if (!targetSocketId || !pmap.has(targetSocketId)) return;
+      if (!pmap.get(targetSocketId)) return;
+      socket.to(roomId).emit('paper:throw', { targetSocketId });
+    });
+
     socket.on('disconnect', () => {
       const roomId = socket.data.roomId;
       if (typeof roomId === 'string') {

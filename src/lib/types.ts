@@ -43,3 +43,13 @@ export type RoomStatePayload = {
   votePhase: VotePhase;
   voteProgress: VoteProgress | null;
 };
+
+/** Ephemeral: someone threw paper at a participant (broadcast to others in room). */
+export type PaperThrowPayload = {
+  targetSocketId: string;
+};
+
+/** Client → server: throw paper animation at a participant (by socket id). */
+export type PaperThrowEmitPayload = {
+  targetSocketId: string;
+};
